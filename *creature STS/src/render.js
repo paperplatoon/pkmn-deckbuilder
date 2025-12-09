@@ -163,6 +163,14 @@ function renderAimOverlay(state) {
   arrow.setAttribute('points', `${p1} ${p2} ${p3}`);
 }
 
+function clearAimOverlay() {
+  const svg = ensureAimOverlayEl();
+  const path = svg.querySelector('path');
+  const arrow = svg.querySelector('polygon');
+  if (path) path.setAttribute('d','');
+  if (arrow) arrow.setAttribute('points','');
+}
+
 function createCreatureCard(state, c, i, opts = {}) {
   const isTarget = state.ui.friendlyTarget?.type === 'creature' && state.ui.friendlyTarget.index === i;
   const card = document.createElement('div');

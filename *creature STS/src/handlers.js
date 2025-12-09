@@ -103,8 +103,10 @@ function attachHandlers(state) {
     const onUp = (ev) => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp, true);
+      // Clear overlay without full render to preserve source card visibility changes
+      try { clearAimOverlay(); } catch(_) {}
       resolveAimByPoint(state, ev.clientX, ev.clientY);
-      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null; render(state);
+      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null;
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp, true);
@@ -126,8 +128,9 @@ function attachHandlers(state) {
     const onUp = (ev) => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp, true);
+      try { clearAimOverlay(); } catch(_) {}
       resolveAimByPoint(state, ev.clientX, ev.clientY);
-      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null; render(state);
+      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null;
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp, true);
@@ -148,15 +151,15 @@ function resolveAimByPoint(state, x, y) {
   if (!aim) return;
   if (aim.kind === 'card') {
     const handIdx = aim.handIndex;
-    if (target.type === 'energy-well') { playCard(state, handIdx, 'energy'); return; }
-    if (target.type === 'enemy') { state.ui.enemyTarget = { index: target.index }; playCard(state, handIdx, 'effect'); return; }
-    if (target.type === 'creature') { state.ui.friendlyTarget = { type: 'creature', index: target.index }; playCard(state, handIdx, 'effect'); return; }
+    if (target.type === 'energy-well') { playCardToEnergyWithFx(state, handIdx); return; }
+    if (target.type === 'enemy') { state.ui.enemyTarget = { index: target.index }; playCardToEnemyWithFx(state, handIdx, target.index); return; }
+    if (target.type === 'creature') { state.ui.friendlyTarget = { type: 'creature', index: target.index }; playCardToCreatureWithFx(state, handIdx, target.index); return; }
     return;
   }
   if (aim.kind === 'move') {
     if (aim.moveId === 'attack' && target.type === 'enemy') {
       state.ui.enemyTarget = { index: target.index };
-      performCreatureAction(state, aim.creatureIndex, 'attack');
+      attackMoveWithFx(state, aim.creatureIndex, target.index);
     }
   }
 }
