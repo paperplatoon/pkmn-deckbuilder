@@ -44,7 +44,8 @@ function renderPlayerPanel(state) {
   const phase = document.createElement('div'); phase.className = 'pill small'; phase.textContent = `Phase: ${state.combat.turn.phase}`;
   hud.append(hp, block, energy, turn, phase);
 
-  // Belt row
+  // Belt region (belt + overlay preview)
+  const beltRegion = document.createElement('div'); beltRegion.className = 'belt-region';
   const belt = document.createElement('div'); belt.className = 'belt'; belt.id = 'belt';
   state.creatures.forEach((c, i) => {
     const ball = document.createElement('div');
@@ -56,20 +57,18 @@ function renderPlayerPanel(state) {
     ball.title = c.alive ? `${c.name} (Summoned)` : (isSummonableCreature(state, i) ? `Summon ${c.name}` : `${c.name} (Turn ≥ ${(state.catalogs.creatures[c.id].summonTurn||1)})`);
     belt.appendChild(ball);
   });
-
-  // Preview area under belt
-  const preview = document.createElement('div'); preview.className = 'belt-preview';
+  beltRegion.appendChild(belt);
+  // Overlay preview (no layout space)
   const idx = state.ui.beltHoverIndex;
   if (idx != null && state.creatures[idx]) {
+    const preview = document.createElement('div'); preview.className = 'belt-preview';
     preview.appendChild(createCreatureCard(state, state.creatures[idx], idx, { enemy: false }));
-  } else {
-    const hint = document.createElement('div'); hint.className = 'small'; hint.textContent = 'Hover your creature to preview; click to summon if playable.';
-    preview.appendChild(hint);
+    beltRegion.appendChild(preview);
   }
 
   const handWrap = document.createElement('div'); handWrap.id = 'hand'; handWrap.innerHTML = renderHand(state);
 
-  panel.append(hud, belt, preview, handWrap);
+  panel.append(hud, beltRegion, handWrap);
   root.append(panel);
 }
 
