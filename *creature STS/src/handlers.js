@@ -25,23 +25,8 @@ function attachHandlers(state) {
     }
   };
 
-  // Hand interactions: delegate to player panel (element is re-rendered)
+  // Hand buttons removed; interactions via drag-to-play
   const playerPanel = document.getElementById('player-panel');
-  if (playerPanel) playerPanel.onclick = function (e) {
-    const btn = e.target.closest("button[data-action]");
-    if (!btn) return;
-    const handIndexAttr = btn.getAttribute("data-hand-index");
-    const action = btn.getAttribute("data-action");
-    if (handIndexAttr == null) return;
-    const idx = parseInt(handIndexAttr, 10);
-    if (action === "play-effect") {
-      playCard(state, idx, "effect");
-      render(state);
-    } else if (action === "play-energy") {
-      playCard(state, idx, "energy");
-      render(state);
-    }
-  };
 
   // Player belt interactions (hover + click)
   if (playerPanel) playerPanel.addEventListener('mousemove', function (e) {
@@ -114,12 +99,12 @@ function attachHandlers(state) {
     state.ui.aim = { kind: 'card', handIndex: idx, startElRect: rect };
     state.ui.pointer = { x: e.clientX, y: e.clientY };
     render(state);
-    const onMove = (ev) => { state.ui.pointer = { x: ev.clientX, y: ev.clientY }; render(state); };
+    const onMove = (ev) => { state.ui.pointer = { x: ev.clientX, y: ev.clientY }; state.ui.dropHover = getDropTargetFromPoint(ev.clientX, ev.clientY); render(state); };
     const onUp = (ev) => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp, true);
       resolveAimByPoint(state, ev.clientX, ev.clientY);
-      state.ui.aim = null; state.ui.pointer = null; render(state);
+      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null; render(state);
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp, true);
@@ -137,12 +122,12 @@ function attachHandlers(state) {
     state.ui.aim = { kind: 'move', creatureIndex: idx, moveId: 'attack', startElRect: rect };
     state.ui.pointer = { x: e.clientX, y: e.clientY };
     render(state);
-    const onMove = (ev) => { state.ui.pointer = { x: ev.clientX, y: ev.clientY }; render(state); };
+    const onMove = (ev) => { state.ui.pointer = { x: ev.clientX, y: ev.clientY }; state.ui.dropHover = getDropTargetFromPoint(ev.clientX, ev.clientY); render(state); };
     const onUp = (ev) => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp, true);
       resolveAimByPoint(state, ev.clientX, ev.clientY);
-      state.ui.aim = null; state.ui.pointer = null; render(state);
+      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null; render(state);
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp, true);
@@ -151,7 +136,7 @@ function attachHandlers(state) {
   // Escape cancels aim
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && state.ui.aim) {
-      state.ui.aim = null; state.ui.pointer = null; render(state);
+      state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null; render(state);
     }
   });
 }

@@ -26,6 +26,26 @@ function renderBattlefield(state) {
   // Enemies
   state.enemies.forEach((e, i) => right.appendChild(createEnemyCard(state, e, i)));
 
+  // Add drop hints/highlights during aim
+  if (state.ui.aim) {
+    const vt = getValidDropTargets(state);
+    if (vt.creatures) {
+      left.querySelectorAll('[data-target="creature"]').forEach((el)=> el.classList.add('drop-hint'));
+    }
+    if (vt.enemies) {
+      right.querySelectorAll('[data-enemy-index]').forEach((el)=> el.classList.add('drop-hint'));
+    }
+    if (state.ui.dropHover) {
+      if (state.ui.dropHover.type === 'creature') {
+        const el = left.querySelector(`[data-target="creature"][data-index="${state.ui.dropHover.index}"]`);
+        if (el) el.classList.add('drop-hover');
+      } else if (state.ui.dropHover.type === 'enemy') {
+        const el = right.querySelector(`[data-enemy-index="${state.ui.dropHover.index}"]`);
+        if (el) el.classList.add('drop-hover');
+      }
+    }
+  }
+
   grid.append(left, right);
   root.append(grid);
 }
@@ -39,10 +59,10 @@ function renderPlayerPanel(state) {
   const hud = document.createElement('div'); hud.className = 'hud-row';
   const p = state.player;
   const hp = document.createElement('div'); hp.className = 'pill'; hp.textContent = `HP: ${p.hp}/${p.maxHp}`;
-  const block = document.createElement('div'); block.className = 'pill'; block.textContent = `Block: ${p.block}`;
+  hud.append(hp);
+  if ((p.block|0) > 0) { hud.append(createShieldChip(p.block)); }
   const turn = document.createElement('div'); turn.className = 'pill small'; turn.textContent = `Turn: ${state.combat.turn.number}`;
-  const phase = document.createElement('div'); phase.className = 'pill small'; phase.textContent = `Phase: ${state.combat.turn.phase}`;
-  hud.append(hp, block, turn, phase, renderManaWell(state));
+  hud.append(turn, renderManaWell(state));
 
   // Belt region (belt + overlay preview)
   const beltRegion = document.createElement('div'); beltRegion.className = 'belt-region';
@@ -84,6 +104,12 @@ function renderManaWell(state) {
   label.className = 'small';
   label.textContent = 'Energy';
   well.append(bubble, label);
+  // Highlight as drop target when aiming
+  if (state.ui.aim) {
+    const vt = getValidDropTargets(state);
+    if (vt.energyWell) well.classList.add('drop-hint');
+    if (state.ui.dropHover && state.ui.dropHover.type === 'energy-well') well.classList.add('drop-hover');
+  }
   return well;
 }
 
@@ -158,6 +184,11 @@ function createCreatureCard(state, c, i, opts = {}) {
   hp.className = 'c-badge hp';
   hp.textContent = String(c.maxHp);
   header.append(avatar, hp);
+  if ((c.block|0) > 0) {
+    const b = document.createElement('div'); b.className = 'c-badge block';
+    b.appendChild(createShieldChip(c.block, true));
+    header.appendChild(b);
+  }
 
   const name = document.createElement('div');
   name.className = 'c-name';
@@ -214,6 +245,11 @@ function createEnemyCard(state, e, i) {
   const img = document.createElement('img'); img.src = enemyArt(e.id); img.alt = e.name; avatar.appendChild(img);
   const hp = document.createElement('div'); hp.className = 'c-badge hp'; hp.textContent = `${e.hp}`;
   header.append(avatar, hp);
+  if ((e.block|0) > 0) {
+    const b = document.createElement('div'); b.className = 'c-badge block';
+    b.appendChild(createShieldChip(e.block, true));
+    header.appendChild(b);
+  }
 
   const name = document.createElement('div'); name.className = 'c-name'; name.textContent = e.name;
   const meta = document.createElement('div'); meta.className = 'small'; meta.textContent = `Atk ${e.attackValue} • Block ${e.blockValue}`;
@@ -221,6 +257,25 @@ function createEnemyCard(state, e, i) {
 
   card.append(header, name, meta, intent);
   return card;
+}
+
+// Small shield chip with SVG + numeric value
+function createShieldChip(value, compact = false) {
+  const wrap = document.createElement('div');
+  wrap.className = 'shield-chip' + (compact ? ' shield-chip--sm' : '');
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(svgNS, 'path');
+  path.setAttribute('d', 'M12 3l7 3v6c0 5-3.8 8.3-7 9-3.2-.7-7-4-7-9V6l7-3z');
+  path.setAttribute('fill', 'currentColor');
+  svg.appendChild(path);
+  const num = document.createElement('div');
+  num.className = 'shield-chip__num';
+  num.textContent = String(value);
+  wrap.append(svg, num);
+  return wrap;
 }
 
 function creatureArt(creatureId) {
@@ -251,7 +306,6 @@ function formatIntent(enemy, state) {
 function renderHand(state) {
   const { hand } = state.combat;
   const cards = hand.map((card, i) => {
-    const canEffect = isPlayable(state, card) && isValidTarget(state, card, card.tags?.includes('damage') ? state.ui.enemyTarget && { type:'enemy', index: state.ui.enemyTarget.index } : state.ui.friendlyTarget);
     const iconClass = card.type === 'creature' ? 'h--creature' : (card.tags?.includes('damage') ? 'h--sword' : (card.tags?.includes('block') ? 'h--shield' : (card.type === 'single-use' ? 'h--star' : '')));
     return `
     <div class="h-card" data-hand-index="${i}">
@@ -261,10 +315,6 @@ function renderHand(state) {
         <div class="h-avatar ${iconClass}"></div>
       </div>
       <div class="h-text small">${card.text(state, card)}</div>
-      <div class="row" style="margin-top:6px">
-        <button data-action="play-effect" data-hand-index="${i}" ${canEffect ? '' : 'disabled'}>Play</button>
-        <button data-action="play-energy" data-hand-index="${i}">Energy +${computeCardEnergyGain(state, card)}</button>
-      </div>
     </div>
   `}).join("");
   return `<div><strong>Hand</strong><div class="row">${cards || emptyCell("Hand is empty")}</div></div>`;

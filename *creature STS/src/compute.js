@@ -139,3 +139,28 @@ function isSummonableCreature(state, creatureIndex) {
   return c.hp > 0;
 }
 window.isSummonableCreature = isSummonableCreature;
+
+// Valid drop targets for current aim
+function getValidDropTargets(state) {
+  const aim = state.ui.aim;
+  if (!aim) return { enemies: false, creatures: false, energyWell: false };
+  if (aim.kind === 'move') {
+    if (aim.moveId === 'attack') return { enemies: true, creatures: false, energyWell: false };
+    if (aim.moveId === 'defend') return { enemies: false, creatures: true, energyWell: false };
+    return { enemies: false, creatures: false, energyWell: false };
+  }
+  if (aim.kind === 'card') {
+    const card = state.combat.hand[aim.handIndex];
+    if (!card) return { enemies: false, creatures: false, energyWell: false };
+    const isDmg = !!(card.tags && card.tags.includes('damage'));
+    const isBlock = !!(card.tags && card.tags.includes('block'));
+    const isBuff = !!(card.tags && (card.tags.includes('grantStrength') || card.tags.includes('grantDexterity') || card.tags.includes('buff')));
+    return {
+      enemies: isDmg,
+      creatures: isBlock || isBuff,
+      energyWell: true,
+    };
+  }
+  return { enemies: false, creatures: false, energyWell: false };
+}
+window.getValidDropTargets = getValidDropTargets;

@@ -132,6 +132,7 @@ function createInitialState() {
       beltHoverIndex: null,
       aim: null,
       pointer: null,
+      dropHover: null,
     },
     modifiers: {
       nextCardDiscount: 0,
