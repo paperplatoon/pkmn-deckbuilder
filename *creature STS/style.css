@@ -1,0 +1,75 @@
+:root {
+  --bg: #0e0f13;
+  --panel: #181a20;
+  --text: #e6e6e6;
+  --muted: #9aa0a6;
+  --accent: #6aa9ff;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+#app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+}
+
+#energy, #player, #creatures, #enemies, #hand, #controls, #log {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.card { border: 1px solid #2b2f36; padding: 8px; border-radius: 6px; min-width: 120px; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #242832; color: var(--muted); font-size: 12px; }
+
+.small { font-size: 12px; color: var(--muted); }
+
+/* Targeting highlights */
+.is-target-friendly { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.is-target-enemy { outline: 2px dotted #ff6a6a; outline-offset: 2px; border-radius: 8px; }
+
+.targetable { cursor: pointer; }
+
+/* Card UI (creatures/enemies) */
+.c-card { display: flex; flex-direction: column; gap: 8px; width: 200px; background: #20242e; border: 1px solid #2b2f36; border-radius: 10px; padding: 10px; }
+.c-header { position: relative; display: flex; justify-content: center; }
+.c-avatar { width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; background: #10131a; }
+.c-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.c-badge.hp { position: absolute; top: 6px; right: 6px; background: #c12525; color: white; border-radius: 999px; padding: 4px 8px; font-weight: 700; }
+.c-name { font-weight: 700; }
+.c-chips { display: flex; gap: 6px; min-height: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: #2a2f3a; color: #e0e4ee; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.chip--sword::before { content: '⚔'; }
+.chip--shield::before { content: '🛡'; }
+.c-moves { display: flex; flex-direction: column; gap: 6px; }
+.move-tile { display: block; width: 100%; text-align: left; background: #262b36; color: #e9eef9; border: 1px solid #323846; border-radius: 8px; padding: 8px; }
+.move-tile[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Hand cards */
+.h-card { display: flex; flex-direction: column; gap: 8px; width: 220px; background: #20242e; border: 1px solid #2b2f36; border-radius: 10px; padding: 10px; }
+.h-header { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 8px; }
+.h-avatar { width: 48px; height: 48px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+.h--sword { background: #3a1d1d; color: #ff6a6a; }
+.h--shield { background: #17263b; color: #6aa9ff; }
+.h--star { background: #3a3213; color: #ffd54d; }
+.h--creature { background: #243124; color: #9ee89e; }
+.h--sword::before { content: '⚔️'; }
+.h--shield::before { content: '🛡️'; }
+.h--star::before { content: '⭐'; }
+.h--creature::before { content: '🐾'; }
+.h-title { font-weight: 700; }
+.h-cost { font-size: 12px; color: var(--muted); }
