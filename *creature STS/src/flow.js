@@ -106,9 +106,7 @@ function startCombat(state) {
   clearAllBlocks(state);
   resetCreaturesForCombat(state);
 
-  // Draw opening hand
-  // Bring all creature summon cards into opening hand
-  bringCreaturesToHand(state);
+  // Draw opening hand (spells only; creatures are summoned from belt)
   draw(state, 5);
   // Set default targets
   state.ui.friendlyTarget = { type: 'player' };
@@ -116,6 +114,8 @@ function startCombat(state) {
   state.ui.enemyTarget = { index: Math.max(0, firstEnemy) };
   planEnemyIntents(state);
   resetCreatureMovesForTurn(state);
+  // Start with 3 persistent energy
+  state.player.energy = 3;
   log(state, "Combat started. Player turn 1.");
 }
 
@@ -123,6 +123,8 @@ function endPlayerTurn(state) {
   if (state.combat.turn.phase !== "player") return;
   discardHand(state);
   draw(state, 5);
+  // Gain 3 persistent energy at end of turn
+  addEnergy(state, 3);
   setPhase(state, "enemy");
   log(state, "End turn → Enemy phase");
 }
@@ -245,11 +247,17 @@ function resolveEnemyActions(state) {
 }
 
 function pruneDead(state) {
-  for (const e of state.enemies) if (e.hp <= 0) e.intent = null;
+  // Remove defeated enemies from array
+  if (Array.isArray(state.enemies)) {
+    const before = state.enemies.length;
+    state.enemies = state.enemies.filter(e => e && e.hp > 0);
+    const removed = before - state.enemies.length;
+    if (removed > 0) log(state, `${removed} enemy${removed>1?'ies':'y'} knocked out.`);
+  }
 }
 
 function checkVictoryDefeat(state) {
-  const allDead = state.enemies.every(e => e.hp <= 0);
+  const allDead = state.enemies.length === 0 || state.enemies.every(e => e.hp <= 0);
   if (allDead) {
     setPhase(state, "victory");
     log(state, "Victory! Rewards granted (MVP stub). Run ends.");
@@ -294,16 +302,7 @@ function ensureValidTargets(state) {
   }
 }
 
-function bringCreaturesToHand(state) {
-  const deck = state.combat.deck;
-  for (let i = deck.length - 1; i >= 0; i--) {
-    const c = deck[i];
-    if (c && c.type === 'creature') {
-      state.combat.hand.push(c);
-      deck.splice(i, 1);
-    }
-  }
-}
+// creatures are no longer drawn into hand; summoning is handled from player belt
 
 function resetCreatureMovesForTurn(state) {
   for (const c of state.creatures) c.movedThisTurn = false;
@@ -332,6 +331,9 @@ function performCreatureAction(state, creatureIndex, actionId) {
     dealDamage(state, { source: { type: 'creature', index: creatureIndex }, target: { type: 'enemy', index: t.index }, amount: dmg });
     log(state, `${c.name} attacks ${state.enemies[t.index].name} for ${dmg}.`);
     if (state.modifiers?.nextAttackExtraDamage > 0) state.modifiers.nextAttackExtraDamage = 0;
+    pruneDead(state);
+    ensureValidTargets(state);
+    checkVictoryDefeat(state);
   } else if (actionId === 'defend') {
     const block = computeMoveBlock(state, c, act);
     gainBlock(state, { target: { type: 'creature', index: creatureIndex }, amount: block });

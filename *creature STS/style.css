@@ -45,7 +45,9 @@ h1 {
 .targetable { cursor: pointer; }
 
 /* Card UI (creatures/enemies) */
-.c-card { display: flex; flex-direction: column; gap: 8px; width: 200px; background: #20242e; border: 1px solid #2b2f36; border-radius: 10px; padding: 10px; }
+.c-card { display: flex; flex-direction: column; gap: 8px; width: 220px; background: #20242e; border: 1px solid #2b2f36; border-radius: 10px; padding: 10px; }
+.c-card--enemy { width: 120px; font-size: 12px; }
+.c-card--ally { width: 220px; }
 .c-header { position: relative; display: flex; justify-content: center; }
 .c-avatar { width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; background: #10131a; }
 .c-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -56,12 +58,14 @@ h1 {
 .chip--sword::before { content: '⚔'; }
 .chip--shield::before { content: '🛡'; }
 .c-moves { display: flex; flex-direction: column; gap: 6px; }
-.move-tile { display: block; width: 100%; text-align: left; background: #262b36; color: #e9eef9; border: 1px solid #323846; border-radius: 8px; padding: 8px; }
+.move-tile { position: relative; display: block; width: 100%; text-align: left; background: #262b36; color: #e9eef9; border: 1px solid #323846; border-radius: 8px; padding: 8px 42px 8px 8px; }
+.move-tile .mv-head { font-weight: 700; margin-bottom: 2px; }
+.move-tile .move-cost { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); background: #3a6af3; color: white; border-radius: 999px; padding: 4px 8px; font-weight: 700; }
 .move-tile[disabled] { opacity: 0.5; cursor: not-allowed; }
 
 /* Hand cards */
-.h-card { display: flex; flex-direction: column; gap: 8px; width: 220px; background: #20242e; border: 1px solid #2b2f36; border-radius: 10px; padding: 10px; }
-.h-header { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 8px; }
+.h-card { position: relative; display: flex; flex-direction: column; gap: 8px; width: 220px; background: #20242e; border: 1px solid #2b2f36; border-radius: 10px; padding: 10px; }
+.h-header { display: grid; grid-template-columns: 1fr; gap: 6px; }
 .h-avatar { width: 48px; height: 48px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
 .h--sword { background: #3a1d1d; color: #ff6a6a; }
 .h--shield { background: #17263b; color: #6aa9ff; }
@@ -71,5 +75,18 @@ h1 {
 .h--shield::before { content: '🛡️'; }
 .h--star::before { content: '⭐'; }
 .h--creature::before { content: '🐾'; }
-.h-title { font-weight: 700; }
-.h-cost { font-size: 12px; color: var(--muted); }
+.h-title { font-weight: 700; padding-right: 36px; }
+.h-cost-badge { position: absolute; top: 6px; right: 6px; background: #3a6af3; color: white; border-radius: 999px; padding: 4px 8px; font-weight: 700; }
+
+/* Battlefield grid & HUD */
+.bf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bf-lane { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.hud-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.player-panel { border: 1px solid #334055; background: linear-gradient(180deg, #1a1f28, #141820); border-radius: 12px; padding: 12px; }
+.energy-bubble { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 8px; border-radius: 999px; background: #3a6af3; color: white; font-weight: 700; }
+.belt { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.belt-ball { width: 22px; height: 22px; border-radius: 999px; border: 2px solid #2b2f36; background: #22262f; }
+.belt-ball--alive { background: #2a5d2a; border-color: #3a7f3a; }
+.belt-ball--playable { background: #2a375d; border-color: #3a6af3; cursor: pointer; }
+.belt-ball--locked { background: #3a2a2a; border-color: #6b3a3a; opacity: 0.6; }
+.belt-preview { margin-bottom: 8px; }

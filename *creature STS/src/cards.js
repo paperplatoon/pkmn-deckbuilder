@@ -20,6 +20,9 @@
         const dmg = computeCardDamage(state, card, { type: 'player' });
         dealDamage(state, { source: { type: 'player' }, target: t, amount: dmg });
         consumeNextAttackBuff(state);
+        pruneDead(state);
+        ensureValidTargets(state);
+        checkVictoryDefeat(state);
         return true;
       },
     },
@@ -206,8 +209,7 @@
     pushMany(deck, 'BLOCK_4', 3);
     pushMany(deck, 'STR_2', 1);
     pushMany(deck, 'DEX_2', 1);
-    pushMany(deck, 'CREATURE_A', 1);
-    pushMany(deck, 'CREATURE_B', 1);
+    // Creature summons are now handled via belt; do not include creature cards in deck
     state.combat.deck = deck.map(defId => createCardInstance(defId));
   }
 

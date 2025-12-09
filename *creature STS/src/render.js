@@ -3,77 +3,80 @@
 // Pure render functions – no state mutation.
 
 function render(state) {
-  setHtml("energy", renderEnergy(state));
-  setHtml("player", renderPlayer(state));
-  renderCreaturesDOM(state);
-  renderEnemiesDOM(state);
-  setHtml("hand", renderHand(state));
+  renderBattlefield(state);
+  renderPlayerPanel(state);
   setHtml("controls", renderControls(state));
   setHtml("log", renderLog(state));
 }
 
-function renderEnergy(state) {
-  return `
-    <div class="row">
-      <div class="pill">Energy: ${state.player.energy}</div>
-      <div class="pill">Turn: ${state.combat.turn.number}</div>
-      <div class="pill">Phase: ${state.combat.turn.phase}</div>
-    </div>
-  `;
-}
-
-function renderPlayer(state) {
-  const p = state.player;
-  const isTarget = state.ui.friendlyTarget?.type === "player";
-  return `
-    <div class="${isTarget ? 'is-target-friendly ' : ''}targetable" data-target="player" title="Click to target Player">
-      <strong>Player</strong>
-      <div class="row small">
-        <div>HP: ${p.hp}/${p.maxHp}</div>
-        <div>Block: ${p.block}</div>
-        <div>Str: 0</div>
-        <div>Dex: 0</div>
-        <div>Gold: ${p.gold}</div>
-      </div>
-    </div>
-  `;
-}
-
-function renderCreaturesDOM(state) {
-  const root = document.getElementById('creatures');
+function renderBattlefield(state) {
+  const root = document.getElementById('battlefield');
   if (!root) return;
   root.innerHTML = '';
-  const title = document.createElement('div');
-  title.innerHTML = '<strong>Creatures</strong>';
-  const row = document.createElement('div');
-  row.className = 'row';
-  // Only show summoned creatures; zone is empty until summon
+  const grid = document.createElement('div');
+  grid.className = 'bf-grid';
+  const left = document.createElement('div'); left.id = 'lane-left'; left.className = 'bf-lane';
+  const right = document.createElement('div'); right.id = 'lane-right'; right.className = 'bf-lane';
+
+  // Player creatures (summoned only)
   state.creatures.forEach((c, i) => {
-    if (c.alive && c.hp > 0) row.appendChild(createCreatureCard(state, c, i));
+    if (c.alive && c.hp > 0) left.appendChild(createCreatureCard(state, c, i, { enemy: false }));
   });
-  root.append(title, row);
+  // Enemies
+  state.enemies.forEach((e, i) => right.appendChild(createEnemyCard(state, e, i)));
+
+  grid.append(left, right);
+  root.append(grid);
 }
 
-function renderEnemiesDOM(state) {
-  const root = document.getElementById('enemies');
+function renderPlayerPanel(state) {
+  const root = document.getElementById('player-panel');
   if (!root) return;
   root.innerHTML = '';
-  const title = document.createElement('div');
-  title.innerHTML = '<strong>Enemies</strong>';
-  const row = document.createElement('div');
-  row.className = 'row';
-  if (state.enemies.length === 0) {
-    row.appendChild(htmlNode(`<div class="small">${escapeHtml('No enemies yet')}</div>`));
+  const panel = document.createElement('div'); panel.className = 'player-panel';
+  // HUD row with energy bubble
+  const hud = document.createElement('div'); hud.className = 'hud-row';
+  const p = state.player;
+  const hp = document.createElement('div'); hp.className = 'pill'; hp.textContent = `HP: ${p.hp}/${p.maxHp}`;
+  const block = document.createElement('div'); block.className = 'pill'; block.textContent = `Block: ${p.block}`;
+  const energy = document.createElement('div'); energy.className = 'energy-bubble'; energy.textContent = `${p.energy}`;
+  const turn = document.createElement('div'); turn.className = 'pill small'; turn.textContent = `Turn: ${state.combat.turn.number}`;
+  const phase = document.createElement('div'); phase.className = 'pill small'; phase.textContent = `Phase: ${state.combat.turn.phase}`;
+  hud.append(hp, block, energy, turn, phase);
+
+  // Belt row
+  const belt = document.createElement('div'); belt.className = 'belt'; belt.id = 'belt';
+  state.creatures.forEach((c, i) => {
+    const ball = document.createElement('div');
+    ball.className = 'belt-ball';
+    ball.setAttribute('data-creature-index', String(i));
+    if (c.alive) ball.classList.add('belt-ball--alive');
+    else if (isSummonableCreature(state, i)) ball.classList.add('belt-ball--playable');
+    else ball.classList.add('belt-ball--locked');
+    ball.title = c.alive ? `${c.name} (Summoned)` : (isSummonableCreature(state, i) ? `Summon ${c.name}` : `${c.name} (Turn ≥ ${(state.catalogs.creatures[c.id].summonTurn||1)})`);
+    belt.appendChild(ball);
+  });
+
+  // Preview area under belt
+  const preview = document.createElement('div'); preview.className = 'belt-preview';
+  const idx = state.ui.beltHoverIndex;
+  if (idx != null && state.creatures[idx]) {
+    preview.appendChild(createCreatureCard(state, state.creatures[idx], idx, { enemy: false }));
   } else {
-    state.enemies.forEach((e, i) => row.appendChild(createEnemyCard(state, e, i)));
+    const hint = document.createElement('div'); hint.className = 'small'; hint.textContent = 'Hover your creature to preview; click to summon if playable.';
+    preview.appendChild(hint);
   }
-  root.append(title, row);
+
+  const handWrap = document.createElement('div'); handWrap.id = 'hand'; handWrap.innerHTML = renderHand(state);
+
+  panel.append(hud, belt, preview, handWrap);
+  root.append(panel);
 }
 
-function createCreatureCard(state, c, i) {
+function createCreatureCard(state, c, i, opts = {}) {
   const isTarget = state.ui.friendlyTarget?.type === 'creature' && state.ui.friendlyTarget.index === i;
   const card = document.createElement('div');
-  card.className = 'c-card targetable' + (isTarget ? ' is-target-friendly' : '');
+  card.className = 'c-card targetable' + (isTarget ? ' is-target-friendly' : '') + (opts.enemy ? ' c-card--enemy' : ' c-card--ally');
   card.setAttribute('data-target', 'creature');
   card.setAttribute('data-index', String(i));
   card.title = 'Click to target Creature';
@@ -122,7 +125,12 @@ function createCreatureCard(state, c, i) {
     const playable = canUse && state.player.energy >= computeMoveCost(state, c, mdef);
     if (!playable) tile.setAttribute('disabled', '');
     const cost = computeMoveCost(state, c, mdef);
-    tile.textContent = `${mdef.text(state, c, mdef)}  •  ${cost}`;
+    // Pokémon-style: title + rules + cost bubble
+    tile.innerHTML = `
+      <div class="mv-head">${escapeHtml(mdef.name || '')}</div>
+      <div class="mv-text small">${escapeHtml(mdef.text(state, c, mdef))}</div>
+      <div class="move-cost">${cost}</div>
+    `;
     moves.appendChild(tile);
   });
 
@@ -133,14 +141,14 @@ function createCreatureCard(state, c, i) {
 function createEnemyCard(state, e, i) {
   const isTarget = state.ui.enemyTarget && state.ui.enemyTarget.index === i && e.hp > 0;
   const card = document.createElement('div');
-  card.className = 'c-card targetable' + (isTarget ? ' is-target-enemy' : '');
+  card.className = 'c-card c-card--enemy targetable' + (isTarget ? ' is-target-enemy' : '');
   card.setAttribute('data-enemy-index', String(i));
   card.title = 'Click to target Enemy';
 
   const header = document.createElement('div'); header.className = 'c-header';
   const avatar = document.createElement('div'); avatar.className = 'c-avatar';
   const img = document.createElement('img'); img.src = enemyArt(e.id); img.alt = e.name; avatar.appendChild(img);
-  const hp = document.createElement('div'); hp.className = 'c-badge hp'; hp.textContent = `${e.hp}/${e.maxHp}`;
+  const hp = document.createElement('div'); hp.className = 'c-badge hp'; hp.textContent = `${e.hp}`;
   header.append(avatar, hp);
 
   const name = document.createElement('div'); name.className = 'c-name'; name.textContent = e.name;
@@ -183,10 +191,10 @@ function renderHand(state) {
     const iconClass = card.type === 'creature' ? 'h--creature' : (card.tags?.includes('damage') ? 'h--sword' : (card.tags?.includes('block') ? 'h--shield' : (card.type === 'single-use' ? 'h--star' : '')));
     return `
     <div class="h-card" data-hand-index="${i}">
+      <div class="h-cost-badge">${computeCardCost(state, card)}</div>
       <div class="h-header">
-        <div class="h-avatar ${iconClass}"></div>
         <div class="h-title">${card.name}</div>
-        <div class="h-cost">Cost ${computeCardCost(state, card)}</div>
+        <div class="h-avatar ${iconClass}"></div>
       </div>
       <div class="h-text small">${card.text(state, card)}</div>
       <div class="row" style="margin-top:6px">

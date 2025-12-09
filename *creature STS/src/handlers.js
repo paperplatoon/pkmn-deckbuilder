@@ -25,9 +25,9 @@ function attachHandlers(state) {
     }
   };
 
-  // Hand interactions: delegate to container
-  const handEl = document.getElementById("hand");
-  if (handEl) handEl.onclick = function (e) {
+  // Hand interactions: delegate to player panel (element is re-rendered)
+  const playerPanel = document.getElementById('player-panel');
+  if (playerPanel) playerPanel.onclick = function (e) {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
     const handIndexAttr = btn.getAttribute("data-hand-index");
@@ -43,19 +43,34 @@ function attachHandlers(state) {
     }
   };
 
-  // Target selection: player
-  const playerEl = document.getElementById("player");
-  if (playerEl) playerEl.onclick = function (e) {
-    const box = e.target.closest('[data-target="player"]');
-    if (!box) return;
-    state.ui.friendlyTarget = { type: 'player' };
-    log(state, 'Target: Player');
-    render(state);
-  };
+  // Player belt interactions (hover + click)
+  if (playerPanel) playerPanel.addEventListener('mousemove', function (e) {
+    const ball = e.target.closest('.belt-ball');
+    const current = state.ui.beltHoverIndex;
+    if (ball) {
+      const idx = parseInt(ball.getAttribute('data-creature-index'), 10);
+      if (current !== idx) { state.ui.beltHoverIndex = idx; render(state); }
+    } else if (current != null) {
+      state.ui.beltHoverIndex = null; render(state);
+    }
+  });
+  if (playerPanel) playerPanel.addEventListener('click', function (e) {
+    const ball = e.target.closest('.belt-ball');
+    if (!ball) return;
+    const idx = parseInt(ball.getAttribute('data-creature-index'), 10);
+    if (isSummonableCreature(state, idx)) {
+      const cid = state.creatures[idx].id;
+      if (summonCreature(state, cid)) {
+        log(state, `Summoned ${state.creatures[idx].name}.`);
+        render(state);
+      }
+    }
+  });
 
-  // Target selection: creatures
-  const creaturesEl = document.getElementById("creatures");
-  if (creaturesEl) creaturesEl.onclick = function (e) {
+  // Battlefield delegation: creatures + enemies in one place
+  const battlefield = document.getElementById('battlefield');
+  if (battlefield) battlefield.onclick = function (e) {
+    // Creature move buttons
     const btn = e.target.closest('button[data-action="creature-move"]');
     if (btn) {
       const idx = parseInt(btn.getAttribute('data-creature-index'), 10);
@@ -64,26 +79,27 @@ function attachHandlers(state) {
       render(state);
       return;
     }
-    const box = e.target.closest('[data-target="creature"]');
-    if (!box) return;
-    const idx = parseInt(box.getAttribute('data-index'), 10);
-    const c = state.creatures[idx];
-    if (!c || c.hp <= 0) { log(state, 'Cannot target a dead creature.'); return; }
-    state.ui.friendlyTarget = { type: 'creature', index: idx };
-    log(state, `Target: ${c.name}`);
-    render(state);
-  };
-
-  // Target selection: enemies
-  const enemiesEl = document.getElementById("enemies");
-  if (enemiesEl) enemiesEl.onclick = function (e) {
-    const box = e.target.closest('[data-enemy-index]');
-    if (!box) return;
-    const idx = parseInt(box.getAttribute('data-enemy-index'), 10);
-    const enemy = state.enemies[idx];
-    if (!enemy || enemy.hp <= 0) { log(state, 'Cannot target a dead enemy.'); return; }
-    state.ui.enemyTarget = { index: idx };
-    log(state, `Enemy target: ${enemy.name} #${idx+1}`);
-    render(state);
+    // Target friendly creature
+    const cre = e.target.closest('[data-target="creature"]');
+    if (cre) {
+      const idx = parseInt(cre.getAttribute('data-index'), 10);
+      const c = state.creatures[idx];
+      if (!c || c.hp <= 0) { log(state, 'Cannot target a dead creature.'); return; }
+      state.ui.friendlyTarget = { type: 'creature', index: idx };
+      log(state, `Target: ${c.name}`);
+      render(state);
+      return;
+    }
+    // Target enemy
+    const ene = e.target.closest('[data-enemy-index]');
+    if (ene) {
+      const idx = parseInt(ene.getAttribute('data-enemy-index'), 10);
+      const enemy = state.enemies[idx];
+      if (!enemy || enemy.hp <= 0) { log(state, 'Cannot target a dead enemy.'); return; }
+      state.ui.enemyTarget = { index: idx };
+      log(state, `Enemy target: ${enemy.name} #${idx+1}`);
+      render(state);
+      return;
+    }
   };
 }

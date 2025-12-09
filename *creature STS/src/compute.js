@@ -127,3 +127,15 @@ function isSummonable(state, card) {
   return cr.hp > 0;
 }
 window.isSummonable = isSummonable;
+
+// Belt summoning helper by creature index
+function isSummonableCreature(state, creatureIndex) {
+  const def = state.catalogs.creatures[state.creatures[creatureIndex]?.id];
+  const c = state.creatures[creatureIndex];
+  if (!def || !c) return false;
+  const gate = def.summonTurn || 1;
+  if ((state.combat.turn.number | 0) < gate) return false;
+  if (c.alive) return false;
+  return c.hp > 0;
+}
+window.isSummonableCreature = isSummonableCreature;
