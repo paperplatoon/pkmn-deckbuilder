@@ -121,7 +121,8 @@ h1 {
 .belt-ball--playable { background: #2a375d; border-color: #3a6af3; cursor: pointer; }
 .belt-ball--locked { background: #3a2a2a; border-color: #6b3a3a; opacity: 0.6; }
 .belt-region { position: relative; }
-.belt-preview { position: absolute; top: calc(-1 * (26vmin + 1.0 * var(--u))); left: 0; z-index: 5; }
+.belt-preview { position: absolute; top: calc(100% + 1.0 * var(--u)); left: 0; z-index: 5; }
+.belt-preview .c-card { box-shadow: 0 8px 24px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25); }
 
 /* Hand tray scroll on narrow screens */
 #hand .row { flex-wrap: nowrap; overflow-x: auto; }

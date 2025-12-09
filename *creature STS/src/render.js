@@ -252,10 +252,9 @@ function createEnemyCard(state, e, i) {
   }
 
   const name = document.createElement('div'); name.className = 'c-name'; name.textContent = e.name;
-  const meta = document.createElement('div'); meta.className = 'small'; meta.textContent = `Atk ${e.attackValue} • Block ${e.blockValue}`;
   const intent = document.createElement('div'); intent.className = 'small'; intent.textContent = `Intent: ${formatIntent(e, state)}`;
 
-  card.append(header, name, meta, intent);
+  card.append(header, name, intent);
   return card;
 }
 
