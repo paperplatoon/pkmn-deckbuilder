@@ -129,6 +129,9 @@ function createInitialState() {
       log: [],
       friendlyTarget: { type: "player" },
       enemyTarget: { index: 0 },
+      beltHoverIndex: null,
+      aim: null,
+      pointer: null,
     },
     modifiers: {
       nextCardDiscount: 0,

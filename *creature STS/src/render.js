@@ -5,6 +5,7 @@
 function render(state) {
   renderBattlefield(state);
   renderPlayerPanel(state);
+  renderAimOverlay(state);
   setHtml("controls", renderControls(state));
   setHtml("log", renderLog(state));
 }
@@ -39,10 +40,9 @@ function renderPlayerPanel(state) {
   const p = state.player;
   const hp = document.createElement('div'); hp.className = 'pill'; hp.textContent = `HP: ${p.hp}/${p.maxHp}`;
   const block = document.createElement('div'); block.className = 'pill'; block.textContent = `Block: ${p.block}`;
-  const energy = document.createElement('div'); energy.className = 'energy-bubble'; energy.textContent = `${p.energy}`;
   const turn = document.createElement('div'); turn.className = 'pill small'; turn.textContent = `Turn: ${state.combat.turn.number}`;
   const phase = document.createElement('div'); phase.className = 'pill small'; phase.textContent = `Phase: ${state.combat.turn.phase}`;
-  hud.append(hp, block, energy, turn, phase);
+  hud.append(hp, block, turn, phase, renderManaWell(state));
 
   // Belt region (belt + overlay preview)
   const beltRegion = document.createElement('div'); beltRegion.className = 'belt-region';
@@ -70,6 +70,71 @@ function renderPlayerPanel(state) {
 
   panel.append(hud, beltRegion, handWrap);
   root.append(panel);
+}
+
+function renderManaWell(state) {
+  const well = document.createElement('div');
+  well.className = 'mana-well';
+  well.id = 'mana-well';
+  well.setAttribute('data-drop','energy-well');
+  const bubble = document.createElement('div');
+  bubble.className = 'energy-bubble energy-bubble--big';
+  bubble.textContent = `${state.player.energy}`;
+  const label = document.createElement('div');
+  label.className = 'small';
+  label.textContent = 'Energy';
+  well.append(bubble, label);
+  return well;
+}
+
+function ensureAimOverlayEl() {
+  let svg = document.getElementById('aim-overlay');
+  if (svg) return svg;
+  const app = document.getElementById('app');
+  svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('id', 'aim-overlay');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.style.position = 'fixed';
+  svg.style.left = '0';
+  svg.style.top = '0';
+  svg.style.pointerEvents = 'none';
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke', '#6aa9ff');
+  path.setAttribute('stroke-width', '3');
+  path.setAttribute('fill', 'none');
+  const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  arrow.setAttribute('fill', '#6aa9ff');
+  svg.append(path, arrow);
+  app.appendChild(svg);
+  return svg;
+}
+
+function renderAimOverlay(state) {
+  const svg = ensureAimOverlayEl();
+  const path = svg.querySelector('path');
+  const arrow = svg.querySelector('polygon');
+  if (!state.ui.aim || !state.ui.pointer) {
+    path.setAttribute('d', '');
+    arrow.setAttribute('points', '');
+    return;
+  }
+  const start = state.ui.aim.startElRect;
+  if (!start) { path.setAttribute('d',''); arrow.setAttribute('points',''); return; }
+  const sx = start.left + start.width / 2;
+  const sy = start.top + start.height * 0.2;
+  const mx = state.ui.pointer.x;
+  const my = state.ui.pointer.y;
+  const cx = (sx + mx) / 2;
+  const cy = Math.min(sy, my) - Math.abs(mx - sx) * 0.2 - 60; // nice arc
+  const d = `M ${sx},${sy} Q ${cx},${cy} ${mx},${my}`;
+  path.setAttribute('d', d);
+  const angle = Math.atan2(my - cy, mx - cx);
+  const size = 12;
+  const p1 = `${mx},${my}`;
+  const p2 = `${mx - size * Math.cos(angle - Math.PI / 6)},${my - size * Math.sin(angle - Math.PI / 6)}`;
+  const p3 = `${mx - size * Math.cos(angle + Math.PI / 6)},${my - size * Math.sin(angle + Math.PI / 6)}`;
+  arrow.setAttribute('points', `${p1} ${p2} ${p3}`);
 }
 
 function createCreatureCard(state, c, i, opts = {}) {
