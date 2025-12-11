@@ -66,8 +66,19 @@ function baseCatalogs() {
       maxHp: 12,
       attackValue: 4,
       blockValue: 4,
+      moves: [
+        { id: 'attack', name: 'Attack', text: (state, enemy) => `Deal ${enemy.attackValue||4} damage.` },
+        { id: 'rage', name: 'Rage', text: (state, enemy) => `Increase the damage of ${findEnemyAttackName(state, enemy)} by 4.` }
+      ],
     },
   };
+
+function findEnemyAttackName(state, enemy) {
+  const def = state.enemies && enemy && enemy.id ? state.catalogs.enemies[enemy.id] : null;
+  if (!def) return 'attack';
+  const atk = (def.moves||[]).find(m => m.id === 'attack') || (def.moves||[]).find(m => /attack/i.test(m.name||''));
+  return atk ? atk.name : 'attack';
+}
 
   return { cards, creatures, enemies };
 }
@@ -174,5 +185,5 @@ function pushMany(arr, value, times) {
 
 // Logging utility (pure state mutation)
 function log(state, message) {
-  state.ui.log.push(String(message));
+  try { console.log(String(message)); } catch (_) {}
 }

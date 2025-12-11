@@ -14,8 +14,12 @@ function attachHandlers(state) {
       render(state);
     } else if (action === "end-turn") {
       endPlayerTurn(state);
-      enemyTurn(state);
-      render(state);
+      const p = enemyTurn(state);
+      if (p && typeof p.then === 'function') {
+        p.then(() => render(state));
+      } else {
+        render(state);
+      }
     } else if (action === "draw-5") {
       draw(state, 5);
       render(state);

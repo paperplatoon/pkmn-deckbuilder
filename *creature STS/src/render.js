@@ -9,7 +9,6 @@ function render(state) {
   renderLevelUp(state);
   renderRewards(state);
   setHtml("controls", renderControls(state));
-  setHtml("log", renderLog(state));
 }
 
 function renderBattlefield(state) {
@@ -199,10 +198,11 @@ function createCreatureCard(state, c, i, opts = {}) {
     b.appendChild(createShieldChip(c.block, true));
     header.appendChild(b);
   }
-
+  // Name overlay
   const name = document.createElement('div');
-  name.className = 'c-name';
+  name.className = 'c-name c-name--overlay';
   name.textContent = c.name;
+  card.appendChild(name);
 
   // Stat chips: Strength/Dex only if > 0
   const chips = document.createElement('div');
@@ -243,7 +243,7 @@ function createCreatureCard(state, c, i, opts = {}) {
     moves.appendChild(tile);
   });
 
-  card.append(header, name, chips, moves);
+  card.append(header, chips, moves);
   // XP bar
   const xpWrap = document.createElement('div'); xpWrap.className = 'xp-bar';
   const fill = document.createElement('div'); fill.className = 'xp-bar__fill';
@@ -274,10 +274,38 @@ function createEnemyCard(state, e, i) {
     header.appendChild(b);
   }
 
-  const name = document.createElement('div'); name.className = 'c-name'; name.textContent = e.name;
-  const intent = document.createElement('div'); intent.className = 'small'; intent.textContent = `Intent: ${formatIntent(e, state)}`;
+  // Name overlay
+  const name = document.createElement('div'); name.className = 'c-name c-name--overlay'; name.textContent = e.name; card.appendChild(name);
+  // Enemy moves (readonly tiles)
+  const def = state.catalogs.enemies[e.id];
+  const moves = document.createElement('div'); moves.className = 'c-moves';
+  (def.moves||[]).forEach(m => {
+    const tile = document.createElement('div'); tile.className = 'move-tile move-tile--readonly';
+    const txt = typeof m.text === 'function' ? m.text(state, e) : String(m.text||'');
+    tile.innerHTML = `
+      <div class="mv-head">${escapeHtml(m.name)}</div>
+      <div class="mv-text small">${escapeHtml(txt)}</div>
+    `;
+    moves.appendChild(tile);
+  });
 
-  card.append(header, name, intent);
+  // Highlight intended move tile
+  if (e.intent) {
+    const desired = e.intent.type === 'attack' ? 'attack' : (e.intent.type === 'buffAttack' ? 'rage' : null);
+    if (desired) {
+      const tiles = moves.querySelectorAll('.move-tile');
+      tiles.forEach(tile => {
+        const head = tile.querySelector('.mv-head');
+        if (!head) return;
+        const txt = (head.textContent||'').toLowerCase();
+        if ((desired === 'attack' && txt.includes('attack')) || (desired === 'rage' && txt.includes('rage'))) {
+          tile.classList.add('intent','intent-pulse');
+        }
+      });
+    }
+  }
+
+  card.append(header, moves);
   return card;
 }
 

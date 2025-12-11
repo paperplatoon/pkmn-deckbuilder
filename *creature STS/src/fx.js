@@ -203,3 +203,76 @@ window.playCardToCreatureWithFx = playCardToCreatureWithFx;
 window.playCardToEnergyWithFx = playCardToEnergyWithFx;
 window.attackMoveWithFx = attackMoveWithFx;
 window.applyMoveBuffWithFx = applyMoveBuffWithFx;
+
+function vw(px) { return (window.innerWidth / 100) * px; }
+
+async function enemyAttackAnimation(enemyIndex) {
+  const enemyEl = document.querySelector(`.c-card.c-card--enemy[data-enemy-index="${enemyIndex}"] .c-avatar`);
+  if (!enemyEl) return;
+  // Step back: move right ~4vw quickly
+  const backX = vw(4);
+  const lungeX = -vw(30);
+  await enemyEl.animate([
+    { transform: 'translateX(0)' },
+    { transform: `translateX(${backX}px)` }
+  ], { duration: 120, easing: 'cubic-bezier(.2,.7,.2,1)' }).finished.catch(()=>{});
+  // brief pause
+  await new Promise(r => setTimeout(r, 100));
+  // Lunge forward fast
+  await enemyEl.animate([
+    { transform: `translateX(${backX}px)` },
+    { transform: `translateX(${lungeX}px)` }
+  ], { duration: 160, easing: 'cubic-bezier(.4,0,.6,1)' }).finished.catch(()=>{});
+  // Return to original place
+  await enemyEl.animate([
+    { transform: `translateX(${lungeX}px)` },
+    { transform: 'translateX(0)' }
+  ], { duration: 160, easing: 'cubic-bezier(.2,.7,.2,1)' }).finished.catch(()=>{});
+}
+
+window.enemyAttackAnimation = enemyAttackAnimation;
+
+function highlightEnemyMoveTile(enemyIndex, moveKey, duration = 300) {
+  const card = document.querySelector(`.c-card.c-card--enemy[data-enemy-index="${enemyIndex}"]`);
+  if (!card) return Promise.resolve();
+  const moves = card.querySelectorAll('.move-tile');
+  let tile = null;
+  moves.forEach(t => {
+    const head = t.querySelector('.mv-head');
+    const txt = (head && head.textContent || '').toLowerCase();
+    if (!tile && ((moveKey === 'attack' && txt.includes('attack')) || (moveKey === 'rage' && txt.includes('rage')))) {
+      tile = t;
+    }
+  });
+  if (!tile) return Promise.resolve();
+  tile.classList.add('executing');
+  return new Promise(resolve => setTimeout(() => { tile.classList.remove('executing'); resolve(); }, duration));
+}
+
+window.highlightEnemyMoveTile = highlightEnemyMoveTile;
+
+function impactFlash(el, color = 'rgba(255,255,255,0.85)', duration = 160, radiusPx = 12) {
+  if (!el) return Promise.resolve();
+  const layer = ensureFxLayer();
+  const r = el.getBoundingClientRect();
+  const flash = document.createElement('div');
+  flash.style.position = 'fixed';
+  flash.style.left = r.left + 'px';
+  flash.style.top = r.top + 'px';
+  flash.style.width = r.width + 'px';
+  flash.style.height = r.height + 'px';
+  flash.style.background = color;
+  flash.style.borderRadius = Math.min(radiusPx, r.width/8) + 'px';
+  flash.style.pointerEvents = 'none';
+  layer.appendChild(flash);
+  return new Promise(resolve => {
+    const anim = flash.animate([
+      { opacity: 0 },
+      { opacity: 1, offset: 0.2 },
+      { opacity: 0 }
+    ], { duration, easing: 'ease-out' });
+    anim.onfinish = () => { flash.remove(); resolve(); };
+  });
+}
+
+window.impactFlash = impactFlash;

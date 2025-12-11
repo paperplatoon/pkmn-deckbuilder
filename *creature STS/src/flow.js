@@ -152,29 +152,36 @@ function planEnemyIntents(state) {
     const doAttack = state.rng.range(0, 1) === 0; // 50/50
     if (doAttack) {
       const target = chooseEnemyTarget(state);
-      e.intent = { type: 'attack', amount: 4, target };
+      e.intent = { type: 'attack', amount: e.attackValue || 4, target };
       const tLabel = target.type === 'player' ? 'Player' : state.creatures[target.index].name;
-      log(state, `${e.name} plans Attack 4 → ${tLabel}.`);
+      log(state, `${e.name} plans Attack ${e.attackValue||4} → ${tLabel}.`);
     } else {
-      e.intent = { type: 'gainStrength', amount: 4 };
-      log(state, `${e.name} plans Gain STR +4.`);
+      e.intent = { type: 'buffAttack', amount: 4 };
+      const def = state.catalogs.enemies[e.id];
+      const atk = (def.moves||[]).find(m=>m.id==='attack') || (def.moves||[]).find(m=>/attack/i.test(m.name||''));
+      const atkName = atk ? atk.name : 'Attack';
+      log(state, `${e.name} plans Increase the damage of ${atkName} by 4.`);
     }
   }
 }
 
-function resolvePlannedEnemyActions(state) {
-  // Simultaneous resolution using planned intents
-  const attacks = [];
+async function resolvePlannedEnemyActions(state) {
+  // Sequential resolution from left to right for clearer animations
   for (let i = 0; i < state.enemies.length; i++) {
     const e = state.enemies[i];
     if (e.hp <= 0 || !e.intent) continue;
-    if (e.intent.type === 'gainStrength') {
-      e.strength = (e.strength|0) + (e.intent.amount|0);
-      log(state, `${e.name} gains STR +${e.intent.amount}. (Total ${e.strength})`);
+    if (e.intent.type === 'buffAttack') {
+      await highlightEnemyMoveTile(i, 'rage', 300);
+      e.attackValue = (e.attackValue|0) + (e.intent.amount|0);
+      const def = state.catalogs.enemies[e.id];
+      const atk = (def.moves||[]).find(m=>m.id==='attack') || (def.moves||[]).find(m=>/attack/i.test(m.name||''));
+      const atkName = atk ? atk.name : 'Attack';
+      log(state, `${e.name} increases the damage of ${atkName} by ${e.intent.amount}. (Now ${e.attackValue})`);
     } else if (e.intent.type === 'attack') {
+      await highlightEnemyMoveTile(i, 'attack', 300);
+      await enemyAttackAnimation(i);
       let t = e.intent.target;
       const needsCreature = anyAliveCreatures(state);
-      // Retarget if invalid creature, or if player is targeted while a creature exists
       const creatureInvalid = t && t.type === 'creature' && (!state.creatures[t.index] || !state.creatures[t.index].alive || state.creatures[t.index].hp <= 0);
       const playerShouldBeRedirected = t && t.type === 'player' && needsCreature;
       if (!t || creatureInvalid || playerShouldBeRedirected) {
@@ -182,27 +189,23 @@ function resolvePlannedEnemyActions(state) {
         const tLabel = t.type === 'player' ? 'Player' : state.creatures[t.index].name;
         log(state, `${e.name} retargets → ${tLabel}.`);
       }
-      const total = (e.intent.amount|0) + (e.strength|0);
-      attacks.push({ target: t, amount: total });
+      const total = (e.intent.amount|0);
+      // Impact FX on target
+      try {
+        if (t.type === 'creature') {
+          const av = document.querySelector(`.c-card.c-card--ally[data-index="${t.index}"] .c-avatar`);
+          await impactFlash(av, 'rgba(255,255,255,0.85)', 160);
+          await shake(document.querySelector(`.c-card.c-card--ally[data-index="${t.index}"]`), { duration: 180 });
+        } else {
+          const panel = document.getElementById('player-panel');
+          await impactFlash(panel, 'rgba(255,255,255,0.65)', 140, 6);
+          await shake(panel, { duration: 160 });
+        }
+      } catch(_) {}
+      dealDamage(state, { source: { type: 'enemy' }, target: t, amount: total });
+      const label = t.type === 'player' ? 'Player' : state.creatures[t.index].name;
+      log(state, `${e.name} deals ${total} to ${label}.`);
     }
-  }
-  // Aggregate per target
-  const byKey = new Map();
-  for (const a of attacks) {
-    const key = a.target.type + (a.target.index != null ? `:${a.target.index}` : '');
-    byKey.set(key, (byKey.get(key) || 0) + a.amount);
-  }
-  for (const [key, total] of byKey.entries()) {
-    let target;
-    if (key.startsWith('creature')) {
-      const idx = parseInt(key.split(':')[1], 10);
-      target = { type: 'creature', index: idx };
-    } else {
-      target = { type: 'player' };
-    }
-    dealDamage(state, { source: { type: 'enemy' }, target, amount: total });
-    const label = target.type === 'player' ? 'Player' : state.creatures[target.index].name;
-    log(state, `Enemies deal ${total} to ${label}.`);
   }
   // Clear intents after resolution
   for (const e of state.enemies) if (e) e.intent = null;
@@ -307,19 +310,26 @@ function checkVictoryDefeat(state) {
 
 function enemyTurn(state) {
   if (state.combat.turn.phase !== "enemy") return;
-  resolvePlannedEnemyActions(state);
-  const removed = pruneDead(state);
-  awardXpToActiveCreature(state, removed);
-  ensureValidTargets(state);
-  resetEnemyBlock(state);
-  if (checkVictoryDefeat(state)) return;
-  // Next player turn
-  state.combat.turn.number += 1;
-  resetTeamBlock(state);
-  setPhase(state, "player");
-  resetCreatureMovesForTurn(state);
-  log(state, `Player turn ${state.combat.turn.number}.`);
-  planEnemyIntents(state);
+  const maybe = resolvePlannedEnemyActions(state);
+  const cont = () => {
+    const removed = pruneDead(state);
+    awardXpToActiveCreature(state, removed);
+    ensureValidTargets(state);
+    resetEnemyBlock(state);
+    if (checkVictoryDefeat(state)) return;
+    // Next player turn
+    state.combat.turn.number += 1;
+    resetTeamBlock(state);
+    setPhase(state, "player");
+    resetCreatureMovesForTurn(state);
+    log(state, `Player turn ${state.combat.turn.number}.`);
+    planEnemyIntents(state);
+  };
+  if (maybe && typeof maybe.then === 'function') {
+    return maybe.then(cont);
+  } else {
+    cont();
+  }
 }
 
 function ensureValidTargets(state) {
