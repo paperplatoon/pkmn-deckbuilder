@@ -40,10 +40,13 @@ function attachHandlers(state) {
     }
   });
   if (playerPanel) playerPanel.addEventListener('click', function (e) {
+    if (state.ui.levelUp || state.ui.rewards) return; // block during overlays
     const ball = e.target.closest('.belt-ball');
     if (!ball) return;
     const idx = parseInt(ball.getAttribute('data-creature-index'), 10);
     if (isSummonableCreature(state, idx)) {
+      // De-summon any currently alive creature
+      state.creatures.forEach((cr, i) => { if (cr.alive && i !== idx) { cr.alive = false; cr.block = 0; }});
       const cid = state.creatures[idx].id;
       if (summonCreature(state, cid)) {
         log(state, `Summoned ${state.creatures[idx].name}.`);
@@ -55,6 +58,7 @@ function attachHandlers(state) {
   // Battlefield delegation: creatures + enemies in one place
   const battlefield = document.getElementById('battlefield');
   if (battlefield) battlefield.onclick = function (e) {
+    if (state.ui.rewards || state.ui.levelUp) return;
     // Creature move buttons
     const btn = e.target.closest('button[data-action="creature-move"]');
     if (btn) {
@@ -138,10 +142,61 @@ function attachHandlers(state) {
 
   // Escape cancels aim
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && state.ui.aim) {
+    if (e.key === 'Escape' && state.ui.aim && !state.ui.rewards && !state.ui.levelUp) {
       state.ui.aim = null; state.ui.pointer = null; state.ui.dropHover = null; render(state);
     }
   });
+
+  // Reward overlay clicks
+  document.addEventListener('click', function (e) {
+    if (!state.ui.rewards) return;
+    const skip = e.target.closest('[data-reward-skip]');
+    const pick = e.target.closest('[data-reward-index]');
+    if (!skip && !pick) return;
+    if (skip) {
+      state.player.gold = (state.player.gold|0) + 5;
+      state.ui.rewards = null;
+      startNextCombat(state);
+      render(state);
+      return;
+    }
+    const idx = parseInt(pick.getAttribute('data-reward-index'), 10);
+    const defId = state.ui.rewards.choices[idx];
+    state.runDeck = state.runDeck || [];
+    state.runDeck.push(defId);
+    // Also add a combat copy into discard
+    const inst = createCardInstanceFromDefId(defId);
+    state.combat.discard.push(inst);
+    state.ui.rewards = null;
+    startNextCombat(state);
+    render(state);
+  }, true);
+
+  // Level up selection clicks
+  document.addEventListener('click', function (e) {
+    if (!state.ui.levelUp) return;
+    const hp = e.target.closest('.levelup-choice.hp-choice');
+    const mv = e.target.closest('.levelup-choice.mv-choice');
+    if (!hp && !mv) return;
+    const ci = state.ui.levelUp.creatureIndex;
+    const c = state.creatures[ci];
+    const need = 2 + (c.level||1);
+    if (hp) {
+      const delta = state.ui.levelUp.hpDelta|0;
+      c.maxHp += delta;
+      c.hp += delta; // assume heal by same amount for feel-good
+    } else if (mv) {
+      const ad = state.ui.levelUp.moveDeltas.attackDelta|0;
+      const bd = state.ui.levelUp.moveDeltas.blockDelta|0;
+      c.permMods.attack = (c.permMods.attack|0) + ad;
+      c.permMods.block = (c.permMods.block|0) + bd;
+    }
+    // Level up bookkeeping
+    c.level = (c.level||1) + 1;
+    c.xp = Math.max(0, (c.xp||0) - need);
+    state.ui.levelUp = null;
+    render(state);
+  }, true);
 }
 
 function resolveAimByPoint(state, x, y) {
@@ -154,6 +209,13 @@ function resolveAimByPoint(state, x, y) {
     if (target.type === 'energy-well') { playCardToEnergyWithFx(state, handIdx); return; }
     if (target.type === 'enemy') { state.ui.enemyTarget = { index: target.index }; playCardToEnemyWithFx(state, handIdx, target.index); return; }
     if (target.type === 'creature') { state.ui.friendlyTarget = { type: 'creature', index: target.index }; playCardToCreatureWithFx(state, handIdx, target.index); return; }
+    if (target.type === 'move') { applyMoveBuffWithFx(state, handIdx, target.creatureIndex, target.moveId); return; }
+    // Temporary empower move support
+    const card = state.combat.hand[handIdx];
+    if (target.type === 'move' && card && (card.tags||[]).includes('move-buff-temp')) {
+      // handled by same FX if any; else fallback
+      applyMoveBuffWithFx(state, handIdx, target.creatureIndex, target.moveId); return;
+    }
     return;
   }
   if (aim.kind === 'move') {
@@ -169,6 +231,12 @@ function getDropTargetFromPoint(x, y) {
   if (!el) return null;
   const energy = el.closest('#mana-well, [data-drop="energy-well"]');
   if (energy) return { type: 'energy-well' };
+  const moveTile = el.closest('.move-tile');
+  if (moveTile) {
+    const ci = parseInt(moveTile.getAttribute('data-creature-index'), 10);
+    const mid = moveTile.getAttribute('data-move-id');
+    if (!isNaN(ci) && mid) return { type: 'move', creatureIndex: ci, moveId: mid };
+  }
   const enemy = el.closest('[data-enemy-index]');
   if (enemy) return { type: 'enemy', index: parseInt(enemy.getAttribute('data-enemy-index'), 10) };
   const creature = el.closest('[data-target="creature"]');

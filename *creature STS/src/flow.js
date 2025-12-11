@@ -71,6 +71,7 @@ function makeEnemyInstance(state, enemyDefId) {
     blockValue: def.blockValue,
     block: 0,
     intent: null,
+    strength: 0,
   };
 }
 
@@ -88,13 +89,14 @@ function resetCreaturesForCombat(state) {
     // HP persists per design
     c.temporaryStrength = 0;
     c.temporaryDexterity = 0;
+    c.moveTempMods = {};
   }
 }
 
 function startCombat(state) {
   // Fresh combat state but persistent player/creatures remain.
   state.combat = createEmptyCombatState();
-  seedStartingDeck(state); // use player deck; starting deck for MVP
+  buildDeckFromRun(state); // build from run deck
   shuffleDeck(state);
 
   // Turn + phase
@@ -102,7 +104,7 @@ function startCombat(state) {
   setPhase(state, "player");
 
   // Enemies & blocks
-  seedEncounter(state);
+  seedEncounterForFight(state);
   clearAllBlocks(state);
   resetCreaturesForCombat(state);
 
@@ -115,7 +117,7 @@ function startCombat(state) {
   planEnemyIntents(state);
   resetCreatureMovesForTurn(state);
   // Start with 3 persistent energy
-  state.player.energy = 3;
+  state.player.energy = state.startingEnergy|0;
   log(state, "Combat started. Player turn 1.");
 }
 
@@ -123,8 +125,8 @@ function endPlayerTurn(state) {
   if (state.combat.turn.phase !== "player") return;
   discardHand(state);
   draw(state, 5);
-  // Gain 3 persistent energy at end of turn
-  addEnergy(state, 3);
+  // Gain energy per turn (persistent)
+  addEnergy(state, state.energyGainedPerTurn|0);
   setPhase(state, "enemy");
   log(state, "End turn → Enemy phase");
 }
@@ -150,12 +152,12 @@ function planEnemyIntents(state) {
     const doAttack = state.rng.range(0, 1) === 0; // 50/50
     if (doAttack) {
       const target = chooseEnemyTarget(state);
-      e.intent = { type: 'attack', amount: e.attackValue, target };
+      e.intent = { type: 'attack', amount: 4, target };
       const tLabel = target.type === 'player' ? 'Player' : state.creatures[target.index].name;
-      log(state, `${e.name} plans Attack ${e.attackValue} → ${tLabel}.`);
+      log(state, `${e.name} plans Attack 4 → ${tLabel}.`);
     } else {
-      e.intent = { type: 'block', amount: e.blockValue };
-      log(state, `${e.name} plans Block ${e.blockValue}.`);
+      e.intent = { type: 'gainStrength', amount: 4 };
+      log(state, `${e.name} plans Gain STR +4.`);
     }
   }
 }
@@ -166,9 +168,9 @@ function resolvePlannedEnemyActions(state) {
   for (let i = 0; i < state.enemies.length; i++) {
     const e = state.enemies[i];
     if (e.hp <= 0 || !e.intent) continue;
-    if (e.intent.type === 'block') {
-      gainBlock(state, { target: { type: 'enemy', index: i }, amount: e.intent.amount });
-      log(state, `${e.name} blocks for ${e.intent.amount}.`);
+    if (e.intent.type === 'gainStrength') {
+      e.strength = (e.strength|0) + (e.intent.amount|0);
+      log(state, `${e.name} gains STR +${e.intent.amount}. (Total ${e.strength})`);
     } else if (e.intent.type === 'attack') {
       let t = e.intent.target;
       const needsCreature = anyAliveCreatures(state);
@@ -180,7 +182,8 @@ function resolvePlannedEnemyActions(state) {
         const tLabel = t.type === 'player' ? 'Player' : state.creatures[t.index].name;
         log(state, `${e.name} retargets → ${tLabel}.`);
       }
-      attacks.push({ target: t, amount: e.intent.amount });
+      const total = (e.intent.amount|0) + (e.strength|0);
+      attacks.push({ target: t, amount: total });
     }
   }
   // Aggregate per target
@@ -247,20 +250,51 @@ function resolveEnemyActions(state) {
 }
 
 function pruneDead(state) {
-  // Remove defeated enemies from array
+  // Remove defeated enemies; return count removed
+  let removed = 0;
   if (Array.isArray(state.enemies)) {
     const before = state.enemies.length;
     state.enemies = state.enemies.filter(e => e && e.hp > 0);
-    const removed = before - state.enemies.length;
+    removed = before - state.enemies.length;
     if (removed > 0) log(state, `${removed} enemy${removed>1?'ies':'y'} knocked out.`);
   }
+  return removed;
+}
+
+function xpNeeded(level) { return 2 + (level|0); }
+
+function awardXpToActiveCreature(state, amount) {
+  if (!amount || amount <= 0) return;
+  const idx = state.creatures.findIndex(c => c.alive && c.hp > 0);
+  if (idx === -1) return;
+  const c = state.creatures[idx];
+  c.xp = (c.xp|0) + amount;
+  const need = xpNeeded(c.level|0);
+  if (c.xp >= need) {
+    startLevelUp(state, idx);
+  }
+}
+
+function startLevelUp(state, creatureIndex) {
+  const rng = state.rng;
+  const hpDelta = rng.range(7, 12);
+  const attackDelta = rng.range(3, 5);
+  const blockDelta = rng.range(3, 5);
+  state.ui.levelUp = {
+    creatureIndex,
+    hpDelta,
+    moveDeltas: { attackDelta, blockDelta },
+    choice: null,
+  };
 }
 
 function checkVictoryDefeat(state) {
   const allDead = state.enemies.length === 0 || state.enemies.every(e => e.hp <= 0);
   if (allDead) {
-    setPhase(state, "victory");
-    log(state, "Victory! Rewards granted (MVP stub). Run ends.");
+    // Show rewards overlay instead of ending run
+    state.ui.rewards = { choices: pickRewardChoices(state) };
+    setPhase(state, "rewards");
+    log(state, "Victory! Choose a reward.");
     return true;
   }
   if (state.player.hp <= 0) {
@@ -274,7 +308,8 @@ function checkVictoryDefeat(state) {
 function enemyTurn(state) {
   if (state.combat.turn.phase !== "enemy") return;
   resolvePlannedEnemyActions(state);
-  pruneDead(state);
+  const removed = pruneDead(state);
+  awardXpToActiveCreature(state, removed);
   ensureValidTargets(state);
   resetEnemyBlock(state);
   if (checkVictoryDefeat(state)) return;
@@ -331,7 +366,8 @@ function performCreatureAction(state, creatureIndex, actionId) {
     dealDamage(state, { source: { type: 'creature', index: creatureIndex }, target: { type: 'enemy', index: t.index }, amount: dmg });
     log(state, `${c.name} attacks ${state.enemies[t.index].name} for ${dmg}.`);
     if (state.modifiers?.nextAttackExtraDamage > 0) state.modifiers.nextAttackExtraDamage = 0;
-    pruneDead(state);
+    const removed = pruneDead(state);
+    awardXpToActiveCreature(state, removed);
     ensureValidTargets(state);
     checkVictoryDefeat(state);
   } else if (actionId === 'defend') {
@@ -342,4 +378,66 @@ function performCreatureAction(state, creatureIndex, actionId) {
   }
   c.movedThisTurn = true;
   return true;
+}
+
+function applyMoveBuff(state, creatureIndex, moveId, amount) {
+  const c = state.creatures[creatureIndex];
+  if (!c) return;
+  c.moveMods = c.moveMods || {};
+  const mod = c.moveMods[moveId] || { damageDelta: 0, blockDelta: 0 };
+  // Determine whether this move is damage or block by looking at creature def
+  const def = state.catalogs.creatures[c.id];
+  const mv = def.moves.find(m => m.id === moveId);
+  if (!mv) return;
+  if (mv.baseDamage != null) mod.damageDelta = (mod.damageDelta|0) + (amount|0);
+  else if (mv.baseBlock != null) mod.blockDelta = (mod.blockDelta|0) + (amount|0);
+  c.moveMods[moveId] = mod;
+}
+
+function applyMoveTempBuff(state, creatureIndex, moveId, amount) {
+  const c = state.creatures[creatureIndex];
+  if (!c) return;
+  c.moveTempMods = c.moveTempMods || {};
+  const mod = c.moveTempMods[moveId] || { damageDelta: 0, blockDelta: 0 };
+  const def = state.catalogs.creatures[c.id];
+  const mv = def.moves.find(m => m.id === moveId);
+  if (!mv) return;
+  if (mv.baseDamage != null) mod.damageDelta = (mod.damageDelta|0) + (amount|0);
+  else if (mv.baseBlock != null) mod.blockDelta = (mod.blockDelta|0) + (amount|0);
+  c.moveTempMods[moveId] = mod;
+}
+
+function buildDeckFromRun(state) {
+  const arr = (state.runDeck || []).map(defId => createCardInstanceFromDefId(defId));
+  state.combat.deck = arr;
+}
+
+function pickRewardChoices(state) {
+  const pool = ['DEAL_4','BLOCK_4','HEAVY_HIT','STRENGTHEN_MOVE','SCALING_STRIKE','EMPOWER_MOVE_TEMP','DOUBLING_STRIKE'];
+  const choices = [];
+  while (choices.length < 3 && choices.length < pool.length) {
+    const i = state.rng.range(0, pool.length - 1);
+    const id = pool[i];
+    if (!choices.includes(id)) choices.push(id);
+  }
+  return choices;
+}
+
+function seedEncounterForFight(state) {
+  const idx = (state.run && state.run.fightIndex) ? state.run.fightIndex : 1;
+  if (idx <= 1) { seedEncounter(state); return; }
+  // Harder fight: 3 enemies with 6/6 attack/block
+  const arr = [];
+  for (let i=0;i<3;i++) {
+    const e = makeEnemyInstance(state, 'GRUNT');
+    e.attackValue = 6; e.blockValue = 6;
+    arr.push(e);
+  }
+  state.enemies = arr;
+}
+
+function startNextCombat(state) {
+  state.run = state.run || { fightIndex: 1 };
+  state.run.fightIndex += 1;
+  startCombat(state);
 }

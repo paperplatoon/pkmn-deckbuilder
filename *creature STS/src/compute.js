@@ -57,7 +57,9 @@ function computeMoveCost(state, creature, move) {
 
 function computeMoveDamage(state, creature, move) {
   ensureModifiers(state);
-  const base = (move.baseDamage || 0) + (creature?.permMods?.attack || 0);
+  const perMoveDelta = (creature?.moveMods && creature.moveMods[move.id] && (creature.moveMods[move.id].damageDelta || 0)) || 0;
+  const perMoveTemp = (creature?.moveTempMods && creature.moveTempMods[move.id] && (creature.moveTempMods[move.id].damageDelta || 0)) || 0;
+  const base = (move.baseDamage || 0) + (creature?.permMods?.attack || 0) + perMoveDelta + perMoveTemp;
   const str = (creature?.strength || 0) + (creature?.temporaryStrength || 0);
   const next = state.modifiers.nextAttackExtraDamage || 0;
   return Math.max(0, base + str + next);
@@ -65,10 +67,12 @@ function computeMoveDamage(state, creature, move) {
 
 function computeMoveBlock(state, creature, move) {
   ensureModifiers(state);
-  const base = (move.baseBlock || 0) + (creature?.permMods?.block || 0);
+  const perMoveDelta = (creature?.moveMods && creature.moveMods[move.id] && (creature.moveMods[move.id].blockDelta || 0)) || 0;
+  const perMoveTemp = (creature?.moveTempMods && creature.moveTempMods[move.id] && (creature.moveTempMods[move.id].blockDelta || 0)) || 0;
+  const base = (move.baseBlock || 0) + (creature?.permMods?.block || 0) + perMoveDelta + perMoveTemp;
   const dex = (creature?.dexterity || 0) + (creature?.temporaryDexterity || 0);
   const next = state.modifiers.nextBlockExtraBlock || 0;
-  return Math.max(0, (move.baseBlock || 0) + dex + next);
+  return Math.max(0, base + dex + next);
 }
 
 function isPlayable(state, card) {
@@ -155,10 +159,12 @@ function getValidDropTargets(state) {
     const isDmg = !!(card.tags && card.tags.includes('damage'));
     const isBlock = !!(card.tags && card.tags.includes('block'));
     const isBuff = !!(card.tags && (card.tags.includes('grantStrength') || card.tags.includes('grantDexterity') || card.tags.includes('buff')));
+    const isMoveBuff = !!(card.tags && (card.tags.includes('move-buff') || card.tags.includes('move-buff-temp')));
     return {
       enemies: isDmg,
       creatures: isBlock || isBuff,
       energyWell: true,
+      moves: isMoveBuff,
     };
   }
   return { enemies: false, creatures: false, energyWell: false };

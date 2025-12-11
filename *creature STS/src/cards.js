@@ -18,9 +18,10 @@
         const t = defaultEnemyTargetSpec(state);
         if (!t) { log(state, 'No valid enemy target.'); return false; }
         const dmg = computeCardDamage(state, card, { type: 'player' });
-        dealDamage(state, { source: { type: 'player' }, target: t, amount: dmg });
-        consumeNextAttackBuff(state);
-        pruneDead(state);
+      dealDamage(state, { source: { type: 'player' }, target: t, amount: dmg });
+      consumeNextAttackBuff(state);
+        const removed = pruneDead(state);
+        awardXpToActiveCreature(state, removed);
         ensureValidTargets(state);
         checkVictoryDefeat(state);
         return true;
@@ -57,12 +58,7 @@
       defId: 'DEX_2', type: 'spell', name: 'Dexterity +2',
       baseCost: 1, baseEnergyGain: 1, tags: ['grantDexterity','spell'],
       text(state, card) { return `Cost ${computeCardCost(state, card)} — Give a creature +2 Dexterity.`; },
-      effect(state, card) {
-        const t = defaultFriendlyTargetSpec(state);
-        if (t.type !== 'creature') { log(state,'Dexterity can only target creatures.'); return false; }
-        gainDexterity(state, { target: t, amount: 2 });
-        return true;
-      },
+      effect(state, card) { return false; },
     },
     PERM_ATK_2: {
       defId: 'PERM_ATK_2', type: 'single-use', name: 'Permanent Attack +2',
@@ -73,6 +69,89 @@
         if (t.type !== 'creature') { log(state,'Choose a creature.'); return false; }
         const cid = state.creatures[t.index].id;
         applyPermanentBuff(state, cid, { attackDelta: 2 });
+        return true;
+      },
+    },
+    STRENGTHEN_MOVE: {
+      defId: 'STRENGTHEN_MOVE', type: 'single-use', name: 'Strengthen Move',
+      baseCost: 1, baseEnergyGain: 1, tags: ['move-buff','single-use','spell'],
+      text(state, card) { return `Cost ${computeCardCost(state, card)} — Strengthen a move (+3) (single use)`; },
+      effect(state, card, ctx) {
+        if (!ctx || !ctx.move) { log(state,'Drag onto a specific move to strengthen it.'); return false; }
+        const { creatureIndex, moveId } = ctx.move;
+        applyMoveBuff(state, creatureIndex, moveId, 3);
+        return true;
+      },
+    },
+    HEAVY_HIT: {
+      defId: 'HEAVY_HIT', type: 'spell', name: 'Heavy Hit',
+      baseCost: 2, baseEnergyGain: 1, baseDamage: 10, tags: ['damage','spell'],
+      text(state, card) { return `Cost ${computeCardCost(state, card)} — Deal ${showMonsterAttackDamage(computeCardDamage(state, card, {type:'player'}))} damage.`; },
+      effect(state, card) {
+        const t = defaultEnemyTargetSpec(state);
+        if (!t) { log(state, 'No valid enemy target.'); return false; }
+        const dmg = computeCardDamage(state, card, { type: 'player' });
+        dealDamage(state, { source: { type: 'player' }, target: t, amount: dmg });
+        consumeNextAttackBuff(state);
+        const removed = pruneDead(state);
+        awardXpToActiveCreature(state, removed);
+        ensureValidTargets(state);
+        checkVictoryDefeat(state);
+        return true;
+      },
+    },
+    SCALING_STRIKE: {
+      defId: 'SCALING_STRIKE', type: 'spell', name: 'Scaling Strike',
+      baseCost: 1, baseEnergyGain: 1, baseDamage: 4, tags: ['damage','spell'],
+      text(state, card) { return `Cost ${computeCardCost(state, card)} — Deal ${showMonsterAttackDamage(computeCardDamage(state, card, {type:'player'}))}. (Gains +4 for this combat)`; },
+      effect(state, card) {
+        const t = defaultEnemyTargetSpec(state);
+        if (!t) { log(state, 'No valid enemy target.'); return false; }
+        const dmg = computeCardDamage(state, card, { type: 'player' });
+        dealDamage(state, { source: { type: 'player' }, target: t, amount: dmg });
+        consumeNextAttackBuff(state);
+        // Scale this instance for rest of combat
+        card.tempMods = card.tempMods || {};
+        card.tempMods.damage = (card.tempMods.damage||0) + 4;
+        const removed = pruneDead(state);
+        awardXpToActiveCreature(state, removed);
+        ensureValidTargets(state);
+        checkVictoryDefeat(state);
+        return true;
+      },
+    },
+    EMPOWER_MOVE_TEMP: {
+      defId: 'EMPOWER_MOVE_TEMP', type: 'spell', name: 'Empower Move (temp)',
+      baseCost: 1, baseEnergyGain: 1, tags: ['move-buff-temp','spell'],
+      text(state, card) { return `Cost ${computeCardCost(state, card)} — Empower a move (+2 this combat)`; },
+      effect(state, card, ctx) {
+        if (!ctx || !ctx.move) { log(state,'Drag onto a move tile.'); return false; }
+        const { creatureIndex, moveId } = ctx.move;
+        applyMoveTempBuff(state, creatureIndex, moveId, 2);
+        return true;
+      },
+    },
+    DOUBLING_STRIKE: {
+      defId: 'DOUBLING_STRIKE', type: 'spell', name: 'Doubling Strike',
+      baseCost: 2, baseEnergyGain: 1, baseDamage: 10, tags: ['damage','spell'],
+      text(state, card) {
+        const dmg = computeCardDamage(state, card, { type: 'player' });
+        return `Cost ${computeCardCost(state, card)} — Deal ${showMonsterAttackDamage(dmg)}. (Doubles its own damage after play)`;
+      },
+      effect(state, card) {
+        const t = defaultEnemyTargetSpec(state);
+        if (!t) { log(state, 'No valid enemy target.'); return false; }
+        const dmg = computeCardDamage(state, card, { type: 'player' });
+        dealDamage(state, { source: { type: 'player' }, target: t, amount: dmg });
+        consumeNextAttackBuff(state);
+        // Double this instance's damage for the rest of combat
+        card.tempMods = card.tempMods || {};
+        const currentBase = (card.baseDamage||0) + (card.tempMods.damage||0);
+        card.tempMods.damage = (card.tempMods.damage||0) + currentBase;
+        const removed = pruneDead(state);
+        awardXpToActiveCreature(state, removed);
+        ensureValidTargets(state);
+        checkVictoryDefeat(state);
         return true;
       },
     },
@@ -145,7 +224,7 @@
   function consumeNextAttackBuff(state) { if (state.modifiers?.nextAttackExtraDamage > 0) state.modifiers.nextAttackExtraDamage = 0; }
   function consumeNextBlockBuff(state) { if (state.modifiers?.nextBlockExtraBlock > 0) state.modifiers.nextBlockExtraBlock = 0; }
 
-  function playCard(state, handIndex, mode) {
+  function playCard(state, handIndex, mode, ctx) {
     const card = state.combat.hand[handIndex];
     if (!card) return false;
 
@@ -183,7 +262,7 @@
       state.modifiers.nextSpellCastsTwice = Math.max(0, state.modifiers.nextSpellCastsTwice - 1);
     }
     let ok = false;
-    for (let i = 0; i < times; i++) ok = card._effect(state, card) || ok;
+    for (let i = 0; i < times; i++) ok = card._effect(state, card, ctx) || ok;
 
     if (!ok) {
       addEnergy(state, cost); // refund on failure
@@ -207,8 +286,8 @@
     const deck = [];
     pushMany(deck, 'DEAL_4', 5);
     pushMany(deck, 'BLOCK_4', 3);
-    pushMany(deck, 'STR_2', 1);
-    pushMany(deck, 'DEX_2', 1);
+    pushMany(deck, 'STRENGTHEN_MOVE', 1);
+    pushMany(deck, 'HEAVY_HIT', 1);
     // Creature summons are now handled via belt; do not include creature cards in deck
     state.combat.deck = deck.map(defId => createCardInstance(defId));
   }
@@ -218,4 +297,5 @@
   // Expose
   window.playCard = playCard;
   window.seedStartingDeck = seedStartingDeckInstances;
+  window.createCardInstanceFromDefId = createCardInstance;
 })();

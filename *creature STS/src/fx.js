@@ -110,10 +110,10 @@ async function playCardToEnemyWithFx(state, handIndex, enemyIndex) {
   cardEl.style.visibility = 'hidden';
   const dst = getCenter(enemyEl);
   await flyClone(cardEl, enemyEl, { scale: 0.9, duration: 220 });
-  await Promise.all([
-    shake(enemyEl, { duration: 180 }),
-    floatingText(dst.x, dst.y, `-${computeCardDamage(state, card, {type:'player'})}`, '#ff6a6a')
-  ]);
+  // Fire-and-forget impact FX for snappier feel
+  shake(enemyEl, { duration: 140 });
+  floatingText(dst.x, dst.y, `-${computeCardDamage(state, card, {type:'player'})}`, '#ff6a6a');
+  // Immediately resolve after impact
   playCard(state, handIndex, 'effect');
   state.ui.animating = false;
   render(state);
@@ -136,10 +136,10 @@ async function playCardToCreatureWithFx(state, handIndex, creatureIndex) {
   const cInst = state.creatures[creatureIndex];
   const blk = computeCardBlock(state, card, { type:'creature', creature: cInst });
   await flyClone(cardEl, creatureEl, { scale: 0.9, duration: 220 });
-  await Promise.all([
-    glowShield(creatureEl, { duration: 450 }),
-    floatingText(getCenter(creatureEl).x, getCenter(creatureEl).y, `+${blk}`, '#6aa9ff')
-  ]);
+  // Fire-and-forget block FX
+  glowShield(creatureEl, { duration: 300 });
+  const cpt = getCenter(creatureEl);
+  floatingText(cpt.x, cpt.y, `+${blk}`, '#6aa9ff');
   state.ui.friendlyTarget = target;
   playCard(state, handIndex, 'effect');
   state.ui.animating = false;
@@ -155,8 +155,9 @@ async function playCardToEnergyWithFx(state, handIndex) {
   if (!card) return;
   state.ui.animating = true;
   cardEl.style.visibility = 'hidden';
-  await flyClone(cardEl, wellEl, { scale: 0.85, duration: 220 });
-  await highlightWell(wellEl, { duration: 300 });
+  await flyClone(cardEl, wellEl, { scale: 0.85, duration: 200 });
+  // Pulse the well but resolve immediately
+  highlightWell(wellEl, { duration: 220 });
   playCard(state, handIndex, 'energy');
   state.ui.animating = false;
   render(state);
@@ -168,12 +169,30 @@ async function attackMoveWithFx(state, creatureIndex, enemyIndex) {
   const enemyEl = document.querySelector(`.c-card.c-card--enemy[data-enemy-index="${enemyIndex}"]`);
   if (!creatureEl || !enemyEl) return;
   state.ui.animating = true;
-  await flyClone(creatureEl, enemyEl, { scale: 1.02, duration: 220 });
-  await Promise.all([
-    shake(enemyEl, { duration: 180 }),
-    floatingText(getCenter(enemyEl).x, getCenter(enemyEl).y, `-${computeMoveDamage(state, state.creatures[creatureIndex], state.catalogs.creatures[state.creatures[creatureIndex].id].moves.find(m=>m.id==='attack'))}`, '#ff6a6a')
-  ]);
+  await flyClone(creatureEl, enemyEl, { scale: 1.02, duration: 200 });
+  shake(enemyEl, { duration: 140 });
+  const dmg = computeMoveDamage(state, state.creatures[creatureIndex], state.catalogs.creatures[state.creatures[creatureIndex].id].moves.find(m=>m.id==='attack'));
+  const ect = getCenter(enemyEl);
+  floatingText(ect.x, ect.y, `-${dmg}`, '#ff6a6a');
   performCreatureAction(state, creatureIndex, 'attack');
+  state.ui.animating = false;
+  render(state);
+}
+
+async function applyMoveBuffWithFx(state, handIndex, creatureIndex, moveId) {
+  if (state.ui.animating) return;
+  const cardEl = document.querySelector(`.h-card[data-hand-index="${handIndex}"]`);
+  const tileEl = document.querySelector(`.move-tile[data-creature-index="${creatureIndex}"][data-move-id="${moveId}"]`);
+  if (!cardEl || !tileEl) return;
+  const card = state.combat.hand[handIndex];
+  if (!card || !(card.tags||[]).includes('move-buff')) { await shake(cardEl,{duration:160}); return; }
+  state.ui.animating = true;
+  cardEl.style.visibility = 'hidden';
+  await flyClone(cardEl, tileEl, { scale: 0.9, duration: 200 });
+  const ct = getCenter(tileEl);
+  floatingText(ct.x, ct.y, `+3`, '#6aa9ff');
+  // Resolve with ctx to let card effect apply
+  playCard(state, handIndex, 'effect', { move: { creatureIndex, moveId } });
   state.ui.animating = false;
   render(state);
 }
@@ -183,3 +202,4 @@ window.playCardToEnemyWithFx = playCardToEnemyWithFx;
 window.playCardToCreatureWithFx = playCardToCreatureWithFx;
 window.playCardToEnergyWithFx = playCardToEnergyWithFx;
 window.attackMoveWithFx = attackMoveWithFx;
+window.applyMoveBuffWithFx = applyMoveBuffWithFx;

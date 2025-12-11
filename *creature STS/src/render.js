@@ -6,6 +6,8 @@ function render(state) {
   renderBattlefield(state);
   renderPlayerPanel(state);
   renderAimOverlay(state);
+  renderLevelUp(state);
+  renderRewards(state);
   setHtml("controls", renderControls(state));
   setHtml("log", renderLog(state));
 }
@@ -229,15 +231,28 @@ function createCreatureCard(state, c, i, opts = {}) {
     if (!playable) tile.setAttribute('disabled', '');
     const cost = computeMoveCost(state, c, mdef);
     // Pokémon-style: title + rules + cost bubble
+    const previewText = mdef.text(state, c, mdef);
+    const perMove = (c.moveMods && c.moveMods[mdef.id]) || {};
+    const bonus = (mdef.baseDamage!=null ? (perMove.damageDelta||0) : (perMove.blockDelta||0));
+    const bonusHtml = bonus > 0 ? ` <span style="color:#6aa9ff">(+${bonus})</span>` : '';
     tile.innerHTML = `
       <div class="mv-head">${escapeHtml(mdef.name || '')}</div>
-      <div class="mv-text small">${escapeHtml(mdef.text(state, c, mdef))}</div>
+      <div class="mv-text small">${escapeHtml(previewText)}${bonusHtml}</div>
       <div class="move-cost">${cost}</div>
     `;
     moves.appendChild(tile);
   });
 
   card.append(header, name, chips, moves);
+  // XP bar
+  const xpWrap = document.createElement('div'); xpWrap.className = 'xp-bar';
+  const fill = document.createElement('div'); fill.className = 'xp-bar__fill';
+  const need = (2 + (c.level||1));
+  const have = Math.min(need, (c.xp||0));
+  const pct = Math.max(0, Math.min(100, Math.round((have/need)*100)));
+  fill.style.width = pct + '%';
+  xpWrap.appendChild(fill);
+  card.appendChild(xpWrap);
   return card;
 }
 
@@ -301,12 +316,85 @@ function enemyArt(enemyId) {
 
 function htmlNode(html) { const div = document.createElement('div'); div.innerHTML = html; return div.firstChild; }
 
+function renderLevelUp(state) {
+  const overlayId = 'levelup-overlay';
+  let overlay = document.getElementById(overlayId);
+  if (!state.ui.levelUp) { if (overlay) overlay.remove(); return; }
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = overlayId;
+    document.body.appendChild(overlay);
+  }
+  const lu = state.ui.levelUp;
+  const c = state.creatures[lu.creatureIndex];
+  const def = state.catalogs.creatures[c.id];
+  overlay.className = 'levelup-overlay';
+  overlay.innerHTML = '';
+  const box = document.createElement('div'); box.className = 'levelup-box';
+  const title = document.createElement('div'); title.className = 'levelup-title'; title.textContent = 'Level Up! Choose one stat to increase permanently';
+
+  // Choices row
+  const choices = document.createElement('div'); choices.className = 'levelup-choices';
+
+  // HP choice
+  const hpChoice = document.createElement('div'); hpChoice.className = 'levelup-choice hp-choice'; hpChoice.setAttribute('data-choice','hp');
+  const hpBadge = document.createElement('div'); hpBadge.className = 'energy-bubble energy-bubble--big hp-bubble';
+  hpBadge.style.background = '#c12525';
+  hpBadge.textContent = `${c.maxHp} (+${lu.hpDelta})`;
+  const hpText = document.createElement('div'); hpText.className = 'small'; hpText.textContent = 'Increase Max HP';
+  hpChoice.append(hpBadge, hpText);
+
+  // Moves choice
+  const mvChoice = document.createElement('div'); mvChoice.className = 'levelup-choice mv-choice'; mvChoice.setAttribute('data-choice','moves');
+  const m1 = def.moves[0]; const m2 = def.moves[1];
+  const mv1 = document.createElement('div'); mv1.className = 'mv-up'; mv1.textContent = `${m1.name}: (+${lu.moveDeltas.attackDelta})`;
+  const mv2 = document.createElement('div'); mv2.className = 'mv-up'; mv2.textContent = `${m2.name}: (+${lu.moveDeltas.blockDelta})`;
+  mvChoice.append(mv1, mv2);
+
+  choices.append(hpChoice, mvChoice);
+  box.append(title, choices);
+  overlay.appendChild(box);
+}
+
+function renderRewards(state) {
+  const id = 'rewards-overlay';
+  let overlay = document.getElementById(id);
+  if (!state.ui.rewards) { if (overlay) overlay.remove(); return; }
+  if (!overlay) { overlay = document.createElement('div'); overlay.id = id; document.body.appendChild(overlay); }
+  overlay.className = 'levelup-overlay';
+  overlay.innerHTML = '';
+  const box = document.createElement('div'); box.className = 'levelup-box';
+  const title = document.createElement('div'); title.className = 'levelup-title'; title.textContent = 'Choose a card to add to your deck';
+  const grid = document.createElement('div'); grid.className = 'levelup-choices';
+  const choices = state.ui.rewards.choices || [];
+  choices.forEach((defId, idx) => {
+    const wrap = document.createElement('div'); wrap.className = 'levelup-choice'; wrap.setAttribute('data-reward-index', String(idx));
+    const card = createCardInstanceFromDefId(defId);
+    // Minimal preview card
+    const preview = document.createElement('div'); preview.className = 'h-card';
+    const cost = document.createElement('div'); cost.className = 'h-cost-badge'; cost.textContent = String(card.baseCost||0);
+    const head = document.createElement('div'); head.className = 'h-header';
+    const ttl = document.createElement('div'); ttl.className = 'h-title'; ttl.textContent = card.name;
+    const av = document.createElement('div'); av.className = 'h-avatar ' + (card.tags?.includes('damage') ? 'h--sword' : (card.tags?.includes('block') ? 'h--shield' : (card.tags?.includes('move-buff') ? 'h--star' : 'h--creature')));
+    head.append(ttl, av);
+    const txt = document.createElement('div'); txt.className = 'h-text small'; txt.textContent = card.text ? card.text(state, card) : '';
+    preview.append(cost, head, txt);
+    wrap.appendChild(preview);
+    grid.appendChild(wrap);
+  });
+  // Skip button
+  const skip = document.createElement('div'); skip.className = 'levelup-choice'; skip.setAttribute('data-reward-skip','true'); skip.textContent = 'Skip (+5 gold)';
+  const container = document.createElement('div'); container.className = 'levelup-choices'; container.append(skip);
+  box.append(title, grid, container);
+  overlay.appendChild(box);
+}
+
 function formatIntent(enemy, state) {
   const it = enemy.intent;
   if (!it) return '-';
   if (typeof it === 'string') return it; // backward compatibility
   if (it.type === 'attack') return `Attack ${it.amount}`;
-  if (it.type === 'block') return `Block ${it.amount}`;
+  if (it.type === 'gainStrength') return `STR +${it.amount}`;
   return '-';
 }
 

@@ -74,6 +74,10 @@ h1 {
 .move-tile .move-cost { position: absolute; top: 50%; right: calc(0.6 * var(--u)); transform: translateY(-50%); background: #3a6af3; color: white; border-radius: 999px; min-width: var(--badge); height: var(--badge); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: clamp(11px, 1.6vmin, 16px); }
 .move-tile[disabled] { opacity: 0.5; cursor: not-allowed; }
 
+/* XP bar */
+.xp-bar { position: relative; height: calc(0.6 * var(--u)); background: #1a1f28; border-radius: 999px; overflow: hidden; margin-top: calc(0.6 * var(--u)); }
+.xp-bar__fill { height: 100%; background: linear-gradient(90deg, #58c2ff, #6aa9ff); width: 0%; transition: width .25s ease-out; }
+
 /* Hand cards */
 .h-card { position: relative; display: flex; flex-direction: column; gap: calc(0.8 * var(--u)); width: var(--card-w-hand); background: #20242e; border: 1px solid #2b2f36; border-radius: calc(1.0 * var(--u)); padding: calc(1.0 * var(--u)); }
 .h-header { display: grid; grid-template-columns: 1fr; gap: calc(0.6 * var(--u)); }
@@ -168,3 +172,13 @@ h1 {
   box-shadow: 0 10px 24px rgba(0,0,0,0.45), 0 0 0 2px rgba(255,255,255,0.6) inset;
   opacity: 0.95;
 }
+
+/* Level up overlay */
+.levelup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 11000; }
+.levelup-box { background: #10151e; border: 1px solid #2b2f36; border-radius: calc(1.0 * var(--u)); padding: calc(1.2 * var(--u)); width: min(92vw, 600px); box-shadow: 0 10px 24px rgba(0,0,0,0.5); }
+.levelup-title { font-weight: 700; text-align: center; margin-bottom: calc(1.0 * var(--u)); font-size: clamp(14px, 2.2vmin, 20px); }
+.levelup-choices { display: grid; grid-template-columns: 1fr 1fr; gap: calc(1.0 * var(--u)); }
+.levelup-choice { background: #181f2a; border: 1px solid #2b2f36; border-radius: calc(0.8 * var(--u)); padding: calc(0.8 * var(--u)); display: flex; flex-direction: column; align-items: center; gap: calc(0.6 * var(--u)); cursor: pointer; }
+.hp-choice .hp-bubble { box-shadow: 0 0 18px rgba(193,37,37,0.6); }
+.mv-choice .mv-up { color: #6aa9ff; font-weight: 700; }
+.levelup-choice:hover { outline: 2px solid #6aa9ff; outline-offset: 2px; }
